@@ -910,6 +910,7 @@ with movers_tab:
         "1mo (21d)": 21,
         "2mo (42d)": 42,
         "6mo (126d)": 126,
+        "1yr (252d)": 252,
     }
     col_tf1, col_tf2 = st.columns([1, 1])
     with col_tf1:
@@ -923,7 +924,7 @@ with movers_tab:
         tf_label = st.selectbox("Window", options=list(timeframe_options.keys()), index=0)
     ndays = timeframe_options[tf_label]
 
-    top_n_movers = st.slider("Show top N", min_value=5, max_value=100, value=25, step=5)
+    top_n_movers = st.slider("Show top N", min_value=1, max_value=50, value=5, step=1)
 
     if st.button("Compute Movers"):
         try:
