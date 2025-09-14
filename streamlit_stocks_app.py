@@ -37,7 +37,7 @@ st.caption("Compare tickers on the same scale over a chosen time range. Data via
     \n Objective: Find Discounted Equities.")
 
 # Tabs for main content
-chart_tab, sp500_tab, pe_tab, movers_tab, growth_tab = st.tabs(["📊 Chart", "📋 S&P 500", "📐 P/E History", "📉 Weekly Movers", "💰 Growth"])
+chart_tab, sp500_tab, pe_tab, movers_tab, growth_tab = st.tabs(["📊 Chart", "📋 S&P 500", "📐 P/E History", "🐮 Weekly Movers", "💰 Growth"])
 
 # --------------
 # Sidebar controls
@@ -696,7 +696,8 @@ with pe_tab:
     
     else:  # Macrotrends
         st.caption("Fetch historical P/E data directly from Macrotrends tables. Uses tickers and time range from sidebar controls.")
-        st.info("💡 **Tip**: Macrotrends has rate limits. For best results, use 3-10 tickers at a time. The app will automatically limit to 10 tickers if you enter more.")
+        st.info("💡 **Tip**: Macrotrends has rate limits. For best results, use 3-10 tickers at a time.\
+            The app will automatically limit to 10 tickers if you enter more. This may not work in the deployed version.")
         
         # Parse tickers for Macrotrends analysis (use sidebar tickers)
         raw_mt = tickers_input.replace(",", " ").upper().split()
@@ -1161,7 +1162,7 @@ with growth_tab:
         st.dataframe(display_df, use_container_width=True)
         
         # Additional insights
-        st.subheader("💡 Key Insights")
+        # st.subheader("💡 Key Insights")
         
         # Calculate doubling time (rule of 72)
         if annual_growth_rate > 0:
@@ -1169,8 +1170,8 @@ with growth_tab:
             st.info(f"**Rule of 72**: Your investment will approximately double every {doubling_time:.1f} years at {annual_growth_rate}% annual growth.")
         
         # Show year when value reaches certain milestones
-        milestones = [starting_value * 2, starting_value * 5, starting_value * 10]
-        milestone_names = ["2x", "5x", "10x"]
+        # milestones = [starting_value * 2, starting_value * 5, starting_value * 10]
+        # milestone_names = ["2x", "5x", "10x"]
         
         # for milestone, name in zip(milestones, milestone_names):
             # if final_value >= milestone:
@@ -1178,13 +1179,13 @@ with growth_tab:
                 # st.success(f"🎯 **{name} milestone** reached in year {milestone_year}")
         
         # Download data
-        csv_data = growth_df.to_csv(index=False)
-        st.download_button(
-            "📥 Download Growth Data (CSV)",
-            data=csv_data,
-            file_name=f"compound_growth_{starting_value}_{annual_growth_rate}pct_{years}years.csv",
-            mime="text/csv"
-        )
+        # csv_data = growth_df.to_csv(index=False)
+        # st.download_button(
+        #     "📥 Download Growth Data (CSV)",
+        #     data=csv_data,
+        #     file_name=f"compound_growth_{starting_value}_{annual_growth_rate}pct_{years}years.csv",
+        #     mime="text/csv"
+        # )
     
     else:
         st.warning("Please enter valid values for all inputs.")
