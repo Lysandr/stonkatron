@@ -492,7 +492,13 @@ def build_pe_timeseries(prices: pd.DataFrame, basis: str) -> pd.DataFrame:
 with chart_tab:
     # Parse tickers
     raw = tickers_input.replace(",", " ").upper().split()
-    tickers = sorted(set([t.strip() for t in raw if t.strip()]))
+    original_tickers = sorted(set([t.strip() for t in raw if t.strip()]))
+    
+    # Normalize tickers for Yahoo Finance (e.g., BRK.B -> BRK-B)
+    tickers = [t.replace(".", "-") for t in original_tickers]
+    
+    # Create mapping from normalized to original for display
+    ticker_mapping = dict(zip(tickers, original_tickers))
 
     if not tickers:
         st.warning("Please enter at least one ticker.")
@@ -505,138 +511,176 @@ with chart_tab:
         if prices.empty:
             st.error("No price data found for the given inputs. Try different dates/tickers.")
         else:
-            # Normalize
-            align_common = (norm_mode.startswith("Align"))
-            norm = normalize_df(prices, align_common=align_common)
-
-            if norm.empty:
-                st.error("Normalization produced an empty dataset (likely no overlapping dates). Try the other baseline option.")
-            else:
-                # Plot with Plotly Express
-                norm_reset = norm.reset_index()
-                norm_reset = norm_reset.rename(columns={norm_reset.columns[0]: "Date"})
-                norm_reset = norm_reset.melt(id_vars=["Date"], var_name="Ticker", value_name="Normalized")
+            # Check if single ticker - show actual prices instead of normalized
+            if len(original_tickers) == 1:
+                # For single ticker, show actual price history
+                price_reset = prices.reset_index()
+                price_reset = price_reset.rename(columns={price_reset.columns[0]: "Date"})
+                
+                # Rename columns to original ticker names for display
+                price_reset = price_reset.rename(columns=ticker_mapping)
+                
+                price_reset = price_reset.melt(id_vars=["Date"], var_name="Ticker", value_name="Price")
                 fig = px.line(
-                    norm_reset,
+                    price_reset,
                     x="Date",
-                    y="Normalized",
+                    y="Price",
                     color="Ticker",
-                    title=f"Normalized Price",
+                    title=f"Stock Price History",
                     log_y=log_scale,
                     width=1500,
                     height=900,
                 )
                 fig.update_layout(legend_title_text="Ticker")
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # Add current ratios bar charts
-                st.subheader("📊 Current Valuation Ratios")
-                st.caption("Latest P/E and EV/EBITDA ratios for quick comparison")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("Current P/E Ratios")
-                    with st.spinner("Fetching current P/E ratios..."):
-                        current_pe_df = fetch_current_pe_ratios(tickers)
-                    
-                    if current_pe_df.empty:
-                        st.warning("No current P/E data available for the selected tickers.")
-                    else:
-                        # Sort by P/E ratio (ascending - lower is better)
-                        current_pe_sorted = current_pe_df.sort_values('PE_Ratio')
-                        
-                        fig_pe_bar = px.bar(
-                            current_pe_sorted.reset_index(),
-                            x='Ticker',
-                            y='PE_Ratio',
-                            title="Current P/E Ratios",
-                            color='PE_Ratio',
-                            color_continuous_scale='RdYlGn_r',  # Red for high, Green for low
-                            height=400
-                        )
-                        fig_pe_bar.update_layout(
-                            xaxis_title="Ticker",
-                            yaxis_title="P/E Ratio",
-                            showlegend=False
-                        )
-                        st.plotly_chart(fig_pe_bar, use_container_width=True)
-                        
-                        # Show data table
-                        # st.dataframe(current_pe_sorted, use_container_width=True)
-                
-                with col2:
-                    st.subheader("Current EV/EBITDA Ratios")
-                    with st.spinner("Fetching current EV/EBITDA ratios..."):
-                        current_ev_df = fetch_current_ev_ebitda_ratios(tickers)
-                    
-                    if current_ev_df.empty:
-                        st.warning("No current EV/EBITDA data available for the selected tickers.")
-                    else:
-                        # Sort by EV/EBITDA ratio (ascending - lower is better)
-                        current_ev_sorted = current_ev_df.sort_values('EV_EBITDA_Ratio')
-                        
-                        fig_ev_bar = px.bar(
-                            current_ev_sorted.reset_index(),
-                            x='Ticker',
-                            y='EV_EBITDA_Ratio',
-                            title="Current EV/EBITDA Ratios",
-                            color='EV_EBITDA_Ratio',
-                            color_continuous_scale='RdYlGn_r',  # Red for high, Green for low
-                            height=400
-                        )
-                        fig_ev_bar.update_layout(
-                            xaxis_title="Ticker",
-                            yaxis_title="EV/EBITDA Ratio",
-                            showlegend=False
-                        )
-                        st.plotly_chart(fig_ev_bar, use_container_width=True)
-                        
-                        # Show data table
-                        st.dataframe(current_ev_sorted, use_container_width=True)
-                
-                st.info("💡 **Lower ratios** in both charts may indicate better value opportunities. Compare within the same industry for context.")
-                
-                # Add EV/EBITDA chart below the normalized price chart
-                st.subheader("📊 EV/EBITDA Ratio")
-                st.caption("Enterprise Value to EBITDA ratio - lower values may indicate undervaluation")
-                
-                with st.spinner("Fetching EV/EBITDA data..."):
-                    ev_ebitda_df = fetch_ev_ebitda_data(tickers, pd.Timestamp(start_date), pd.Timestamp(end_date))
-                
-                if ev_ebitda_df.empty:
-                    st.warning("No EV/EBITDA data available for the selected tickers. This data may not be available for all companies.")
+            else:
+                # For multiple tickers, normalize as before
+                align_common = (norm_mode.startswith("Align"))
+                norm = normalize_df(prices, align_common=align_common)
+
+                if norm.empty:
+                    st.error("Normalization produced an empty dataset (likely no overlapping dates). Try the other baseline option.")
                 else:
-                    # Plot EV/EBITDA data
-                    ev_ebitda_tidy = ev_ebitda_df.reset_index().melt(id_vars=[ev_ebitda_df.index.name or "index"], var_name="Ticker", value_name="EV_EBITDA")
-                    ev_ebitda_tidy = ev_ebitda_tidy.rename(columns={ev_ebitda_tidy.columns[0]: "Date"})
-                    ev_ebitda_tidy = ev_ebitda_tidy.dropna(subset=['EV_EBITDA'])
+                    # Plot with Plotly Express
+                    norm_reset = norm.reset_index()
+                    norm_reset = norm_reset.rename(columns={norm_reset.columns[0]: "Date"})
                     
-                    if not ev_ebitda_tidy.empty:
-                        fig_ev = px.line(
-                            ev_ebitda_tidy,
-                            x="Date",
-                            y="EV_EBITDA",
-                            color="Ticker",
-                            title="EV/EBITDA Ratio Over Time",
-                            width=1500,
-                            height=600,
-                        )
-                        fig_ev.update_layout(legend_title_text="Ticker")
-                        st.plotly_chart(fig_ev, use_container_width=True)
+                    # Rename columns to original ticker names for display
+                    norm_reset = norm_reset.rename(columns=ticker_mapping)
+                    
+                    norm_reset = norm_reset.melt(id_vars=["Date"], var_name="Ticker", value_name="Normalized")
+                    fig = px.line(
+                        norm_reset,
+                        x="Date",
+                        y="Normalized",
+                        color="Ticker",
+                        title=f"Normalized Price",
+                        log_y=log_scale,
+                        width=1500,
+                        height=900,
+                    )
+                    fig.update_layout(legend_title_text="Ticker")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Add current ratios bar charts
+                    st.subheader("📊 Current Valuation Ratios")
+                    st.caption("Latest P/E and EV/EBITDA ratios for quick comparison")
+                
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.subheader("Current P/E Ratios")
+                        with st.spinner("Fetching current P/E ratios..."):
+                            current_pe_df = fetch_current_pe_ratios(tickers)
                         
-                        # Show latest EV/EBITDA values
-                        ev_ebitda_clean = ev_ebitda_df.dropna()
-                        if not ev_ebitda_clean.empty:
-                            latest_ev = ev_ebitda_clean.iloc[-1].sort_values(ascending=True)
-                            latest_ev_df = latest_ev.to_frame(name="Latest EV/EBITDA")
-                            st.dataframe(latest_ev_df, use_container_width=True)
+                        if current_pe_df.empty:
+                            st.warning("No current P/E data available for the selected tickers.")
                         else:
-                            st.warning("No valid EV/EBITDA data points available for display.")
+                            # Rename index to original ticker names for display
+                            current_pe_df_display = current_pe_df.copy()
+                            current_pe_df_display.index = current_pe_df_display.index.map(ticker_mapping)
+                            
+                            # Sort by P/E ratio (ascending - lower is better)
+                            current_pe_sorted = current_pe_df_display.sort_values('PE_Ratio')
+                            
+                            fig_pe_bar = px.bar(
+                                current_pe_sorted.reset_index(),
+                                x='Ticker',
+                                y='PE_Ratio',
+                                title="Current P/E Ratios",
+                                color='PE_Ratio',
+                                color_continuous_scale='RdYlGn_r',  # Red for high, Green for low
+                                height=400
+                            )
+                            fig_pe_bar.update_layout(
+                                xaxis_title="Ticker",
+                                yaxis_title="P/E Ratio",
+                                showlegend=False
+                            )
+                            st.plotly_chart(fig_pe_bar, use_container_width=True)
+                            
+                            # Show data table
+                            # st.dataframe(current_pe_sorted, use_container_width=True)
+                    
+                    with col2:
+                        st.subheader("Current EV/EBITDA Ratios")
+                        with st.spinner("Fetching current EV/EBITDA ratios..."):
+                            current_ev_df = fetch_current_ev_ebitda_ratios(tickers)
                         
-                        st.info("💡 **Lower EV/EBITDA ratios** may indicate better value opportunities, but consider industry context and company fundamentals.")
+                        if current_ev_df.empty:
+                            st.warning("No current EV/EBITDA data available for the selected tickers.")
+                        else:
+                            # Rename index to original ticker names for display
+                            current_ev_df_display = current_ev_df.copy()
+                            current_ev_df_display.index = current_ev_df_display.index.map(ticker_mapping)
+                            
+                            # Sort by EV/EBITDA ratio (ascending - lower is better)
+                            current_ev_sorted = current_ev_df_display.sort_values('EV_EBITDA_Ratio')
+                            
+                            fig_ev_bar = px.bar(
+                                current_ev_sorted.reset_index(),
+                                x='Ticker',
+                                y='EV_EBITDA_Ratio',
+                                title="Current EV/EBITDA Ratios",
+                                color='EV_EBITDA_Ratio',
+                                color_continuous_scale='RdYlGn_r',  # Red for high, Green for low
+                                height=400
+                            )
+                            fig_ev_bar.update_layout(
+                                xaxis_title="Ticker",
+                                yaxis_title="EV/EBITDA Ratio",
+                                showlegend=False
+                            )
+                            st.plotly_chart(fig_ev_bar, use_container_width=True)
+                            
+                            # Show data table
+                            # st.dataframe(current_ev_sorted, use_container_width=True)
+                    
+                    st.info("💡 **Lower ratios** in both charts may indicate better value opportunities. Compare within the same industry for context.")
+                
+                    # Add EV/EBITDA chart below the normalized price chart
+                    st.subheader("📊 EV/EBITDA Ratio")
+                    st.caption("Enterprise Value to EBITDA ratio - lower values may indicate undervaluation")
+                    
+                    with st.spinner("Fetching EV/EBITDA data..."):
+                        ev_ebitda_df = fetch_ev_ebitda_data(tickers, pd.Timestamp(start_date), pd.Timestamp(end_date))
+                    
+                    if ev_ebitda_df.empty:
+                        st.warning("No EV/EBITDA data available for the selected tickers. This data may not be available for all companies.")
                     else:
-                        st.warning("No valid EV/EBITDA data points found after filtering.")
+                        # Rename columns to original ticker names for display
+                        ev_ebitda_df_display = ev_ebitda_df.rename(columns=ticker_mapping)
+                        
+                        # Plot EV/EBITDA data
+                        ev_ebitda_tidy = ev_ebitda_df_display.reset_index().melt(id_vars=[ev_ebitda_df_display.index.name or "index"], var_name="Ticker", value_name="EV_EBITDA")
+                        ev_ebitda_tidy = ev_ebitda_tidy.rename(columns={ev_ebitda_tidy.columns[0]: "Date"})
+                        ev_ebitda_tidy = ev_ebitda_tidy.dropna(subset=['EV_EBITDA'])
+                        
+                        if not ev_ebitda_tidy.empty:
+                            fig_ev = px.line(
+                                ev_ebitda_tidy,
+                                x="Date",
+                                y="EV_EBITDA",
+                                color="Ticker",
+                                title="EV/EBITDA Ratio Over Time",
+                                width=1500,
+                                height=600,
+                            )
+                            fig_ev.update_layout(legend_title_text="Ticker")
+                            st.plotly_chart(fig_ev, use_container_width=True)
+                            
+                            # Show latest EV/EBITDA values
+                            # ev_ebitda_clean = ev_ebitda_df.dropna()
+                            # if not ev_ebitda_clean.empty:
+                            #     latest_ev = ev_ebitda_clean.iloc[-1].sort_values(ascending=True)
+                            #     latest_ev_df = latest_ev.to_frame(name="Latest EV/EBITDA")
+                            #     st.dataframe(latest_ev_df, use_container_width=True)
+                            # else:
+                            #     st.warning("No valid EV/EBITDA data points available for display.")
+                            
+                            # st.info("💡 **Lower EV/EBITDA ratios** may indicate better value opportunities, but consider industry context and company fundamentals.")
+                        else:
+                            st.warning("No valid EV/EBITDA data points found after filtering.")
 
 
 # -----------------------------
@@ -656,6 +700,9 @@ with pe_tab:
         # Parse tickers for P/E analysis
         raw_pe = tickers_input.replace(",", " ").upper().split()
         tickers_pe = sorted(set([s.strip() for s in raw_pe if s.strip()]))
+        
+        # Normalize tickers for Yahoo Finance (e.g., BRK.B -> BRK-B)
+        tickers_pe = [t.replace(".", "-") for t in tickers_pe]
         
         if not tickers_pe:
             st.warning("Please enter at least one ticker in the sidebar.")
@@ -690,7 +737,7 @@ with pe_tab:
                     if not pe_clean.empty:
                         latest = pe_clean.iloc[-1].sort_values(ascending=False)
                         latest_df = latest.to_frame(name="Latest P/E")
-                        st.dataframe(latest_df, use_container_width=True)
+                        # st.dataframe(latest_df, use_container_width=True)
                     else:
                         st.warning("No valid P/E data points available for display.")
     
@@ -702,6 +749,9 @@ with pe_tab:
         # Parse tickers for Macrotrends analysis (use sidebar tickers)
         raw_mt = tickers_input.replace(",", " ").upper().split()
         tickers_mt = sorted(set([s.strip() for s in raw_mt if s.strip()]))
+        
+        # Normalize tickers for Yahoo Finance (e.g., BRK.B -> BRK-B)
+        tickers_mt = [t.replace(".", "-") for t in tickers_mt]
         
         if not tickers_mt:
             st.warning("Please enter at least one ticker in the sidebar.")
@@ -776,7 +826,7 @@ with pe_tab:
                                 if not pe_mt_clean.empty:
                                     latest_mt = pe_mt_clean.iloc[-1].sort_values(ascending=False)
                                     latest_df_mt = latest_mt.to_frame(name="Latest P/E (Macrotrends)")
-                                    st.dataframe(latest_df_mt, use_container_width=True)
+                                    # st.dataframe(latest_df_mt, use_container_width=True)
                                 else:
                                     st.warning("No valid P/E data points available for display.")
                                 
