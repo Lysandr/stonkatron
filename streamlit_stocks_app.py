@@ -1032,7 +1032,17 @@ with movers_tab:
                 if "Return_N" in view_disp.columns:
                     view_disp["Return_N"] = view_disp["Return_N"].apply(to_pct)
 
-                st.dataframe(view_disp, use_container_width=True)
+                # Add hyperlinks to tickers for Yahoo Finance
+                def create_ticker_link(ticker):
+                    yahoo_url = f"https://finance.yahoo.com/quote/{ticker}"
+                    return f'<a href="{yahoo_url}" target="_blank">{ticker}</a>'
+                
+                # Create a copy for display with hyperlinked tickers
+                view_disp_with_links = view_disp.copy()
+                view_disp_with_links["Symbol"] = view_disp_with_links["Symbol"].apply(create_ticker_link)
+                
+                # Display the dataframe with HTML links
+                st.markdown(view_disp_with_links.to_html(escape=False, index=False), unsafe_allow_html=True)
 
                 import plotly.express as px
                 fig_mv = px.bar(view, x="Symbol", y=ycol, title=title, width=1500, height=700)
