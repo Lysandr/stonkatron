@@ -133,7 +133,7 @@ def fetch_prices(tickers: List[str], start: pd.Timestamp, end: pd.Timestamp, int
         prices = extract_close(data, tickers[0]).to_frame()
 
     prices = prices.dropna(how="all")
-    prices = prices.fillna(method="ffill").dropna(how="all")  # keep columns even if leading NaNs
+    prices = prices.ffill().dropna(how="all")  # keep columns even if leading NaNs
     return prices
 
 def normalize_df(prices: pd.DataFrame, align_common: bool) -> pd.DataFrame:
